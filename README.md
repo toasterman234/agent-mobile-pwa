@@ -9,6 +9,17 @@ live streaming and push notifications.
 > shared as a reusable reference — you'll point it at your own backend (or adapt the API
 > calls) to run it end to end.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/board.png" width="23%" alt="Board" />
+  <img src="docs/screenshots/run-chat.png" width="23%" alt="Run chat" />
+  <img src="docs/screenshots/ax-chat.png" width="23%" alt="Agent chat with live trace" />
+  <img src="docs/screenshots/flows.png" width="23%" alt="Flow runs" />
+</p>
+
+<p align="center"><sub>Board · run chat · agent chat with live trace · flow runs — all captured in <code>DEMO=1</code> mode with sample data.</sub></p>
+
 ## What it does
 
 - **Board** — your agent runs grouped into status columns, with filters (status / type /
@@ -64,6 +75,17 @@ python3 app.py
 ```
 
 > ⚠️ Sending a reply triggers **real agent work and spend** on your backend.
+
+## Demo mode (no backend needed)
+
+Want to see the UI without wiring up a daemon? Run with `DEMO=1` — it serves canned
+sample data (the screenshots above) instead of proxying to a real backend, and falls
+back to plain HTTP if you don't have a TLS cert:
+
+```bash
+DEMO=1 python3 app.py
+# open http://localhost:4775
+```
 
 ## License
 

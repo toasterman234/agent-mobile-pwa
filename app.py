@@ -63,6 +63,223 @@ NTFY_TOPIC_FILE = os.path.expanduser(os.environ.get("NTFY_TOPIC_FILE", "~/.pi/da
 PHONE_URL = "https://%s:%d" % (PUBLIC_HOST, PORT)
 
 
+# ---- demo mode --------------------------------------------------------------------
+# Set DEMO=1 to serve canned, obviously-fake sample data instead of proxying to a real
+# daemon. Lets anyone boot the UI with no backend — and lets you take screenshots
+# without exposing real runs, chats, or flows.
+DEMO = os.environ.get("DEMO", "0") == "1"
+
+
+def _iso(t):
+    return time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(t))
+
+
+def _demo_runs():
+    now = time.time()
+    return [
+        {"runId": "demo-remediate-01", "name": "remediate: dashboard 500s",
+         "assignmentName": "remediate", "agentName": "remediate", "backend": "pi",
+         "model": "claude-opus", "effectiveStatus": "blocked", "runGroupId": "remediate",
+         "tasksTotal": 5, "tasksCompleted": 2, "updatedAt": _iso(now - 240),
+         "startedAt": _iso(now - 900)},
+        {"runId": "demo-research-02", "name": "research: competitor pricing",
+         "assignmentName": "research-handoff", "agentName": "researcher", "backend": "pi",
+         "model": "claude-sonnet", "effectiveStatus": "running", "runGroupId": "research",
+         "tasksTotal": 4, "tasksCompleted": 1, "updatedAt": _iso(now - 90),
+         "startedAt": _iso(now - 180)},
+        {"runId": "demo-pa-05", "name": "morning briefing",
+         "assignmentName": "", "agentName": "pi-pa", "backend": "pi",
+         "model": "claude-sonnet", "effectiveStatus": "ready",
+         "tasksTotal": 0, "tasksCompleted": 0, "updatedAt": _iso(now - 45),
+         "startedAt": _iso(now - 60)},
+        {"runId": "demo-build-03", "name": "build: export-to-CSV button",
+         "assignmentName": "build-product", "agentName": "engineer", "backend": "pi",
+         "model": "gpt-5-codex", "effectiveStatus": "success", "runGroupId": "build",
+         "tasksTotal": 6, "tasksCompleted": 6, "updatedAt": _iso(now - 3600),
+         "startedAt": _iso(now - 5400)},
+        {"runId": "demo-gh-06", "name": "PR #142 review",
+         "assignmentName": "", "agentName": "pi-github", "backend": "pi",
+         "model": "claude-sonnet", "effectiveStatus": "success",
+         "tasksTotal": 2, "tasksCompleted": 2, "updatedAt": _iso(now - 1800),
+         "startedAt": _iso(now - 2100)},
+        {"runId": "demo-card-04", "name": "do-card: tighten retry backoff",
+         "assignmentName": "do-card", "agentName": "engineer", "backend": "pi",
+         "model": "claude-opus", "effectiveStatus": "exhausted", "runGroupId": "cards",
+         "tasksTotal": 3, "tasksCompleted": 1, "updatedAt": _iso(now - 7200),
+         "startedAt": _iso(now - 9000)},
+    ]
+
+
+# request message + response transcript per demo run, so the chat view looks real
+_DEMO_CONVOS = {
+    "demo-remediate-01": [
+        ("Dashboard is throwing 500s on /metrics since the last deploy. Investigate and fix.",
+         "Root cause: the /metrics handler calls `db.pool.acquire()` without a timeout; "
+         "the pool was exhausted by a leaked connection in the regime-panel query.\n\n"
+         "Proposed fix: add `timeout=5s` on acquire + close the cursor in a `finally`. "
+         "Awaiting your approval at the gate before applying."),
+    ],
+    "demo-research-02": [
+        ("Compare the pricing tiers of the three main competitors and summarize where we sit.",
+         "Gathering pricing pages now — 1 of 3 sources read. Partial: Competitor A starts "
+         "at $29/mo (5 seats), Competitor B at $49/mo (unlimited seats)…"),
+    ],
+    "demo-build-03": [
+        ("Add an 'Export to CSV' button to the reports table.",
+         "Done. Added `exportCsv()` in `reports/table.tsx`, wired a toolbar button, and "
+         "covered it with a unit test. All 6 checks pass."),
+    ],
+    "demo-pa-05": [
+        ("Give me my morning briefing.",
+         "Good morning. 2 runs finished overnight, 1 gate is awaiting your approval, and "
+         "the market-data job is green. Top item: the dashboard remediation needs a yes/no."),
+    ],
+    "demo-gh-06": [
+        ("Review PR #142 and leave inline comments.",
+         "Reviewed. 2 comments left: a missing null-check in `parseRange()` and a suggestion "
+         "to memoize the sort. Otherwise LGTM."),
+    ],
+    "demo-card-04": [
+        ("Tighten the retry backoff on the ingest worker.",
+         "Attempt ended without a saved transcript. The worker retried 3× and the run hit "
+         "its step budget before finishing."),
+    ],
+}
+
+
+def _demo_timeline(rid):
+    now = time.time()
+    convo = _DEMO_CONVOS.get(rid, [])
+    attempts = []
+    for i, (ask, resp) in enumerate(convo, start=1):
+        started = now - 600 + i * 30
+        attempts.append({
+            "attemptNumber": i, "startedAt": _iso(started),
+            "endedAt": _iso(started + 8), "exitCode": 0, "timedOut": False,
+            "prompt": ask, "transcript": resp,
+        })
+    return {"history": {"attempts": attempts}}
+
+
+def _demo_run_detail(rid):
+    convo = _DEMO_CONVOS.get(rid, [])
+    sessions, msg = [], (convo[0][0] if convo else "")
+    for i, (ask, _resp) in enumerate(convo, start=1):
+        sessions.append({"firstAttemptNumber": i, "lastAttemptNumber": i, "message": ask})
+    return {"run": {"sessions": sessions, "message": msg}}
+
+
+def _demo_flow_runs():
+    now = time.time()
+    return {"runs": [
+        {"id": "flow-research-01", "flowId": "research-decompose", "ok": True,
+         "latencySec": 12.4, "ts": _iso(now - 300),
+         "input": "Compare competitor pricing tiers",
+         "output": "3 sub-questions answered and synthesized into a pricing matrix."},
+        {"id": "flow-quant-02", "flowId": "quant-pipeline", "ok": True,
+         "latencySec": 48.1, "ts": _iso(now - 5400),
+         "input": "Backtest QQQ covered calls at 30-delta",
+         "output": "Segment A drawn and run; promote verdict pending the gate."},
+        {"id": "flow-router-03", "flowId": "router-classify", "ok": True,
+         "latencySec": 1.2, "ts": _iso(now - 60),
+         "input": "what time is it in Tokyo?",
+         "output": "class=simple_direct → routed to a fast model."},
+    ]}
+
+
+def _demo_flow_detail(fid):
+    now = time.time()
+    base = {
+        "flow-research-01": {
+            "flowId": "research-decompose", "ok": True, "latencySec": 12.4,
+            "input": "Compare competitor pricing tiers",
+            "output": "Competitor A $29/mo, B $49/mo, C usage-based. We sit mid-market.",
+            "nodes": [
+                {"nodeId": "decompose", "model": "claude-sonnet", "tokens": 420,
+                 "input": "Compare competitor pricing tiers",
+                 "output": "3 sub-questions: A pricing, B pricing, C pricing"},
+                {"nodeId": "search·fanout", "model": "claude-sonnet", "tokens": 1880,
+                 "input": "3 sub-questions", "output": "3 pricing pages retrieved + parsed"},
+                {"nodeId": "synthesize", "model": "claude-opus", "tokens": 760,
+                 "input": "3 findings", "output": "pricing matrix + positioning note"},
+            ],
+        },
+        "flow-router-03": {
+            "flowId": "router-classify", "ok": True, "latencySec": 1.2,
+            "input": "what time is it in Tokyo?",
+            "output": "class=simple_direct",
+            "nodes": [
+                {"nodeId": "classify", "model": "haiku", "tokens": 90,
+                 "input": "what time is it in Tokyo?",
+                 "output": "{\"class\":\"simple_direct\",\"confidence\":0.97}"},
+            ],
+        },
+    }.get(fid, {
+        "flowId": fid, "ok": True, "latencySec": 48.1,
+        "input": "Backtest QQQ covered calls at 30-delta",
+        "output": "Segment A drawn and run; promote verdict pending the gate.",
+        "nodes": [
+            {"nodeId": "design", "model": "claude-opus", "tokens": 1200,
+             "input": "strategy spec", "output": "drew the pipeline graph"},
+            {"nodeId": "backtest·segmentA", "model": "tool:optopsy", "tokens": 0,
+             "input": "QQQ chains 2011–2025", "output": "per-trade premium 0.28% → 0.90% gated"},
+        ],
+    })
+    base["ts"] = _iso(now - 300)
+    return base
+
+
+def demo_get(path, full_path):
+    """Return (ctype, body_bytes) for a demo GET, or None to fall through."""
+    if path == "/api/runs":
+        return "application/json", json.dumps({"runs": _demo_runs()}).encode()
+    if path == "/api/agents":
+        names = ["pi-pa", "researcher", "engineer", "remediate", "pi-github"]
+        return "application/json", json.dumps(
+            {"agents": {"entries": [{"name": n} for n in names]}}).encode()
+    if path == "/api/assignments":
+        names = ["research-handoff", "build-product", "do-card", "remediate"]
+        return "application/json", json.dumps(
+            {"assignments": {"entries": [{"name": n} for n in names]}}).encode()
+    if path.startswith("/api/runs/") and path.endswith("/timeline"):
+        rid = path[len("/api/runs/"):-len("/timeline")]
+        return "application/json", json.dumps(_demo_timeline(rid)).encode()
+    if path.startswith("/api/runs/") and path.count("/") == 3:
+        rid = path[len("/api/runs/"):]
+        return "application/json", json.dumps(_demo_run_detail(rid)).encode()
+    if path == "/ax/runs":
+        return "application/json", json.dumps(_demo_flow_runs()).encode()
+    if path.startswith("/ax/runs/"):
+        return "application/json", json.dumps(_demo_flow_detail(path[len("/ax/runs/"):])).encode()
+    if path == "/ax/answer":
+        return "application/json", b"{}"
+    # unknown proxied GET in demo: empty object so the UI degrades gracefully
+    return "application/json", b"{}"
+
+
+# canned AX chat reply, streamed as SSE events (status / route / turn / deltas / [DONE])
+_DEMO_AX_EVENTS = [
+    {"type": "status", "text": "classifying your message…"},
+    {"type": "route-decision", "route": "simple_direct",
+     "rationale": "single-turn question, no tools needed"},
+    {"type": "turn", "stage": "answer", "model": "claude-sonnet", "latencySec": 1.8},
+]
+_DEMO_AX_REPLY = ("Here's a sample reply from demo mode. In a real run this streams from "
+                  "your AX backend token-by-token, with the trace above showing how the "
+                  "message was routed and which model answered.")
+
+
+def demo_post(path):
+    """Return (ctype, body_bytes) for a non-streaming demo POST, or None for streaming."""
+    if path == "/ax/dispatcher":
+        return None  # handled as a stream by the caller
+    if path == "/api/runs":
+        return "application/json", json.dumps({"runId": "demo-research-02"}).encode()
+    # resume / queue / notify / anything else → generic success
+    return "application/json", b'{"ok":true}'
+
+
+
 # ---- server-side AX answer store ----------------------------------------------
 # The phone's chat history lives in localStorage, but iOS suspends the page's JS the
 # moment the app is closed — so an answer that arrives after you leave never gets saved
@@ -1468,6 +1685,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(out)
             return
+        if DEMO and self._is_proxy():
+            ctype, body = demo_get(path, self.path)
+            self._send_bytes(body, ctype)
+            return
         if self._is_proxy():
             self._proxy("GET")
             return
@@ -1522,10 +1743,47 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 self._send_bytes(('{"error":"%s"}' % e).encode(), "application/json", status=400)
             return
+        if DEMO and self._is_proxy():
+            length = int(self.headers.get("Content-Length") or 0)
+            if length:
+                self.rfile.read(length)  # drain the request body
+            if path == "/ax/dispatcher":
+                self._demo_dispatcher_stream()
+            else:
+                ctype, body = demo_post(path)
+                self._send_bytes(body, ctype)
+            return
         if self._is_proxy():
             self._proxy("POST")
             return
         self.send_error(404)
+
+    def _demo_dispatcher_stream(self):
+        """Stream a canned AX chat reply as SSE so the chat tab shows a live answer + trace."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+        def emit(obj):
+            try:
+                self.wfile.write(("data: " + json.dumps(obj) + "\n\n").encode())
+                self.wfile.flush()
+            except Exception:
+                pass
+
+        try:
+            for ev in _DEMO_AX_EVENTS:
+                emit(ev)
+                time.sleep(0.4)
+            for word in _DEMO_AX_REPLY.split(" "):
+                emit({"delta": word + " "})
+                time.sleep(0.03)
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+        except Exception:
+            pass
 
     def do_DELETE(self):
         if self._is_proxy():
@@ -1647,15 +1905,25 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 def main():
-    if not (os.path.exists(CERT) and os.path.exists(KEY)):
+    have_cert = os.path.exists(CERT) and os.path.exists(KEY)
+    if not have_cert and not DEMO:
         print("missing TLS cert:", CERT, file=sys.stderr)
         sys.exit(1)
     httpd = Server((HOST, PORT), Handler)
-    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ctx.load_cert_chain(CERT, KEY)
-    httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-    print(f"agent-mobile-pwa serving https://{HOST}:{PORT}  (proxy -> {DAEMON})")
-    print(f"phone: {PHONE_URL}")
+    scheme = "http"
+    if have_cert:
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(CERT, KEY)
+        httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+        scheme = "https"
+    elif DEMO:
+        print("DEMO mode: no TLS cert found — serving plain HTTP. Fine for viewing and "
+              "screenshots; an installable PWA + push still need HTTPS.", file=sys.stderr)
+    if DEMO:
+        print("** DEMO MODE — serving canned sample data, not a real backend. **")
+    print(f"agent-mobile-pwa serving {scheme}://{HOST}:{PORT}"
+          + ("" if DEMO else f"  (proxy -> {DAEMON})"))
+    print(f"phone: {scheme}://{PUBLIC_HOST}:{PORT}")
     httpd.serve_forever()
 
 
