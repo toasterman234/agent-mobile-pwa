@@ -1,17 +1,13 @@
 # Agent Mobile PWA
 
-> Source file: `pi-board-spike.py` (the project began as a "pi board" spike).
-
 A **one-file mobile PWA** — a phone-friendly board + agent chat that runs on top of an
-[agent-runner](https://github.com/) daemon's existing HTTP API. No app store, no build
-step: a single Python file serves an HTTPS web app you add to your iPhone/Android home
-screen, with live streaming and push notifications.
+agent-runner daemon's existing HTTP API. No app store, no build step: a single Python
+file (`app.py`) serves an HTTPS web app you add to your iPhone/Android home screen, with
+live streaming and push notifications.
 
-> **Heads up — this is a "spike" (a working prototype).** It was built to prove one idea:
-> *you can put a good mobile front-end on a local agent daemon's existing `/api` with
-> nothing but the standard library + a push-crypto dependency.* It's hardcoded to that
-> daemon's API shape and shared here as a reference/recipe, not a turnkey product. Expect
-> to adapt the API calls to your own backend.
+> **Note:** this is a front-end. It's wired to a specific agent daemon's `/api` shape and
+> shared as a reusable reference — you'll point it at your own backend (or adapt the API
+> calls) to run it end to end.
 
 ## What it does
 
@@ -55,7 +51,7 @@ Phones require a trusted cert for service workers + push. Easiest path is a
 tailscale cert your-host.your-tailnet.ts.net
 PI_BOARD_TLS=/path/to/your-host.your-tailnet.ts.net \
 PI_BOARD_PUBLIC_HOST=your-host.your-tailnet.ts.net \
-python3 pi-board-spike.py
+python3 app.py
 ```
 
 Then open `https://your-host…:4775` on the phone and "Add to Home Screen."
@@ -64,7 +60,7 @@ Then open `https://your-host…:4775` on the phone and "Add to Home Screen."
 
 ```bash
 pip install cryptography
-python3 pi-board-spike.py
+python3 app.py
 ```
 
 > ⚠️ Sending a reply triggers **real agent work and spend** on your backend.

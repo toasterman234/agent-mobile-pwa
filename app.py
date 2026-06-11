@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-pi-board-spike — a one-file mobile PWA-style board + chat over the agent-runner daemon.
+Agent Mobile PWA — a one-file mobile PWA: board + chat over an agent-runner daemon.
 
-Proves Option B: a phone-friendly front-end on pi's EXISTING /api API.
+A phone-friendly front-end on the daemon's EXISTING /api, served as an installable
+web app over HTTPS.
 
 What it does:
   - Serves a mobile board at /  (your real runs grouped into status columns)
@@ -14,10 +15,10 @@ What it does:
     forwards GET/POST/DELETE so writes go through)
   - Serves HTTPS using the Tailscale cert so the phone connects with a green lock
 
-Run:   python3 pi-board-spike.py
+Run:   python3 app.py
 Phone: https://<your-host>:4775   (e.g. over Tailscale, with a cert for that host)
 
-Throwaway spike. Sending a reply triggers real agent work + spend.
+Note: sending a reply triggers real agent work + spend on your backend.
 
 Config is via environment variables (all have localhost-friendly defaults):
   PI_DAEMON        agent-runner daemon base URL   (default http://127.0.0.1:4773)
@@ -1653,7 +1654,7 @@ def main():
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(CERT, KEY)
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-    print(f"pi-board-spike serving https://{HOST}:{PORT}  (proxy -> {DAEMON})")
+    print(f"agent-mobile-pwa serving https://{HOST}:{PORT}  (proxy -> {DAEMON})")
     print(f"phone: {PHONE_URL}")
     httpd.serve_forever()
 

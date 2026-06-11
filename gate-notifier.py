@@ -123,7 +123,7 @@ def notify(topic: str, run: dict) -> bool:
 
 
 def web_push(run: dict) -> bool:
-    """App-opening web push (tap -> opens the PWA on this run). Best-effort; the spike
+    """App-opening web push (tap -> opens the PWA on this run). Best-effort; the app
     owns the push keys, so we just trigger its localhost broadcast endpoint."""
     rid = run["runId"]
     name = run.get("name") or rid
